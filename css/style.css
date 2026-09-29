@@ -400,6 +400,7 @@ label.btn { cursor: pointer; }
     white-space: nowrap;
 }
 .badge--mock { background: var(--color-warning-soft); border-color: color-mix(in srgb, var(--color-warning) 30%, transparent); color: var(--color-warning); }
+.badge--live { background: var(--color-success-soft); border-color: color-mix(in srgb, var(--color-success) 30%, transparent); color: var(--color-success); }
 .badge--offline { background: var(--color-danger-soft); border-color: color-mix(in srgb, var(--color-danger) 30%, transparent); color: var(--color-danger); }
 .badge--success { background: var(--color-success-soft); color: var(--color-success); border-color: color-mix(in srgb, var(--color-success) 28%, transparent); }
 .badge--danger { background: var(--color-danger-soft); color: var(--color-danger); border-color: color-mix(in srgb, var(--color-danger) 28%, transparent); }
@@ -734,7 +735,17 @@ label.btn { cursor: pointer; }
 .notice h3 { font-size: 1rem; margin-bottom: .3em; }
 .notice--error { background: var(--color-danger-soft); border-color: color-mix(in srgb, var(--color-danger) 26%, transparent); }
 .notice--error > .icon { color: var(--color-danger); }
+.notice--warning { background: var(--color-warning-soft); border-color: color-mix(in srgb, var(--color-warning) 26%, transparent); }
+.notice--warning > .icon { color: var(--color-warning); }
 .notice__actions { margin-top: 12px; display: flex; gap: 8px; flex-wrap: wrap; }
+
+.notice--inline {
+    margin: 12px 0;
+    padding: 10px 13px;
+    font-size: .82rem;
+    line-height: 1.5;
+    color: var(--color-text-soft);
+}
 
 /* ---------- 13. Paginação ---------- */
 

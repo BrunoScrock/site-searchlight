@@ -17,7 +17,7 @@ const UI = (function () {
             "resultsToolbar", "prospectsContainer", "prospectsFilters", "dashboardGrid", "historyList", "historyCount",
             "exportsPanel", "settingsForm", "navProspectCount", "providerBadge", "offlineBadge", "categoryList",
             "countryList", "stateList", "cityList", "datalistCategories", "datalistCountries", "datalistStates", "datalistCities",
-            "filterForm", "resultCount", "duplicatesNote", "analysisNote", "historySection", "emptyResults"
+            "filterForm", "resultCount", "duplicatesNote", "analysisNote", "historySection", "emptyResults", "sourceNotice"
         ];
         ids.forEach(function (id) { els[id] = document.getElementById(id); });
     }
@@ -335,8 +335,13 @@ const UI = (function () {
             const notes = [];
             if (state.summary.duplicatesRemoved) notes.push(state.summary.duplicatesRemoved + " duplicado(s) removido(s)");
             if (state.summary.fromCache) notes.push("exibido do cache local");
-            if (state.summary.provider === "mock") notes.push("dados de demonstração");
             els.duplicatesNote.textContent = notes.join(" · ");
+        }
+        if (els.sourceNotice) {
+            const notice = API.getSourceNotice(state.summary && state.summary.provider);
+            els.sourceNotice.textContent = notice;
+            els.sourceNotice.hidden = !notice;
+            els.sourceNotice.classList.toggle("notice--warning", (state.summary && state.summary.provider) === "mock");
         }
         if (els.analysisNote && state.summary) {
             els.analysisNote.textContent = "Fonte: " + (state.summary.provider || CONFIG.provider) + " · " + Utils.formatDateTime(new Date());

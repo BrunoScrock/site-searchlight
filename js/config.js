@@ -16,12 +16,29 @@ const CONFIG = {
     resultsPerPage: 20,
     maxResultsPerSearch: 200,
 
+    /* "osm" = OpenStreetMap via Overpass: dados reais, sem chave, sem custo.
+       "mock" = demonstração fictícia (apenas para avaliar a interface).
+       "google" / "serpapi" = exigem proxy serverless (ver README). */
     enableMockData: true,
-    provider: "mock",
+    provider: "osm",
 
     /* Endpoint serverless opcional que fala com o provedor real.
        Ex.: "https://api.seudominio.com/places" — implementa POST { action, params }. */
     proxyUrl: "",
+
+    /* Endpoints públicos do OpenStreetMap. Ambos respondem com
+       Access-Control-Allow-Origin: *, então funcionam direto do navegador. */
+    osm: {
+        overpass: "https://overpass-api.de/api/interpreter",
+        overpassFallback: "https://overpass.private.coffee/api/interpreter",
+        nominatim: "https://nominatim.openstreetmap.org/search"
+    },
+
+    /* Overpass é um serviço compartilhado e costuma recusar carga excessiva.
+       Os limites abaixo evitam que uma busca trave a interface. */
+    osmTimeoutMs: 45000,
+    osmMaxResults: 120,
+    osmResultSeconds: 180,
 
     /* Cabeçalho opcional enviado ao proxy. Prefira um token de uso único por
        sessão gerado localmente; nunca versione um segredo real aqui. */
@@ -39,6 +56,13 @@ const CONFIG = {
 
     whatsappMessage:
         "Olá! Encontrei sua empresa durante uma pesquisa e gostaria de apresentar uma proposta de site.",
+
+    /* Como avisar sobre a origem dos dados. O OpenStreetMap é mantido por
+       Volunteers, então a cobertura varia muito entre cidades e categorias. */
+    sourceNotice: {
+        osm: "Dados do OpenStreetMap, mantidos por voluntários. A cobertura de site, telefone e redes sociais varia bastante por cidade e categoria: muitas empresas ainda não foram mapeadas com esses dados.",
+        google: "Dados do Google Places, via proxy serverless. Verifique os termos de uso do provedor antes de usar comercialmente."
+    },
 
     /* Critérios técnicos do "perfil para prospecção".
        Representa apenas sinais técnicos observáveis nos dados, nunca um juízo
@@ -143,6 +167,38 @@ const CATEGORY_TERMS = {
     "contadores": ["contador", "contabilidade", "accountant", "accounting", "tax", "contabilidade"],
     "consultores": ["consultor", "consultoria", "consultant", "consulting", "coach"]
 };
+
+/* Mapeamento categoria -> etiquetas do OpenStreetMap.
+   Usado pelo provedor "osm" para montar a consulta Overpass.
+   Acrescente novas categorias livremente; sem mapeamento, a busca assume
+   "shop" genérico, que costuma devolver pouco resultado. */
+const OSM_TAGS = {
+    "mecanicas": { shop: "car_repair", craft: "car_repair", name: /mec[aâ]nica|oficina|auto|turbo|funilaria|pintura|boracha/i },
+    "eletricistas": { craft: "electrician", office: "electrician", name: /el[eé]tric/i },
+    "encanadores": { craft: "plumber", name: /encanador|hidr[aá]ulic|canaliz/i },
+    "marceneiros": { craft: "carpenter", shop: "carpentry", name: /marcen|madeira|planejados|m[oó]veis/i },
+    "serralheiros": { craft: "locksmith", name: /serralher|chaveiro|fechadura/i },
+    "vidracarias": { craft: "glaziery", shop: "glass", name: /vidra[cç]|vidro|espelho/i },
+    "estofarias": { craft: "upholsterer", shop: "upholstery", name: /estofad|sof[aá]|colch[oõ]es|poltrona/i },
+    "instaladores": { craft: "installer", name: /instala|antena/i },
+    "pintores": { craft: "painter", name: /pintor|pintura|decora[cç]/i },
+    "empresas-de-limpeza": { shop: "cleaning", name: /limpeza|higiene|zeladoria|conserv/i },
+    "barbearias": { shop: "hairdresser", name: /barbear|barbeiro|navalha/i },
+    "saloes": { shop: "hairdresser", name: /sal[aã]o|cabelo|hair|beleza/i },
+    "manicure": { shop: "beauty", name: /manicure|unhas|nail/i },
+    "estetica": { shop: "beauty", amenity: "spa", name: /est[eé]tica|cl[ií]nica|spa|beauty/i },
+    "sobrancelhas": { shop: "beauty", name: /sobrancelh|design de sobrancelha/i },
+    "cabeleireiros": { shop: "hairdresser", name: /cabeleireiro|hair|sal[aã]o/i },
+    "fotógrafos": { shop: "photography", name: /foto|est[uú]dio|lens|clique/i },
+    "personal-trainers": { leisure: "fitness_centre", amenity: "gym", name: /personal|training|academia|fit/i },
+    "arquitetos": { office: "architect", name: /arquiteto|arquitetura|studio/i },
+    "designers": { office: "graphic_design", name: /design|studio|criativ/i },
+    "contadores": { office: "accountant", name: /contador|contabilidade|contab/i },
+    "consultores": { office: "consulting", name: /consultor|consultoria|mentoria/i }
+};
+
+/* Fallback quando a categoria não tem mapeamento próprio. */
+const OSM_GENERIC_TAGS = { shop: "*" };
 
 /* Redes sociais: nunca contam como site próprio (§15/§16). Editável. */
 const SOCIAL_DOMAINS = [

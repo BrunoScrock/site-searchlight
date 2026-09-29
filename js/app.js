@@ -696,11 +696,11 @@ const APP = (function () {
         const badge = UI.els.providerBadge;
         if (!badge) return;
         const provider = API.SearchProvider[CONFIG.provider];
-        badge.textContent = CONFIG.provider === "mock" ? "Modo demonstração" : provider ? provider.label : CONFIG.provider;
-        badge.classList.toggle("badge--mock", CONFIG.provider === "mock");
-        badge.title = CONFIG.provider === "mock"
-            ? "Os dados são fictícios e servem para avaliar a interface."
-            : "Provedor: " + CONFIG.provider;
+        const isMock = CONFIG.provider === "mock";
+        badge.textContent = isMock ? "Dados fictícios" : provider ? provider.label : CONFIG.provider;
+        badge.classList.toggle("badge--mock", isMock);
+        badge.classList.toggle("badge--live", !isMock);
+        badge.title = API.getSourceNotice(CONFIG.provider) || (provider ? provider.label : "");
     }
 
     function updateConnectivity() {

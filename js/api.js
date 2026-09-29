@@ -20,6 +20,48 @@ const API = (function () {
         }
     }
 
+    /* Resposta fetch com timeout e leitura de JSON, distinguindo os erros que
+       valem a pena tentar outro endpoint (429/504) dos que não. */
+    async function fetchJson(url, timeoutMs) {
+        const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+        const timer = controller ? setTimeout(function () { controller.abort(); }, timeoutMs || CONFIG.requestTimeoutMs) : null;
+        let response;
+        try {
+            response = await fetch(url, {
+                method: "GET",
+                mode: "cors",
+                credentials: "omit",
+                headers: { Accept: "application/json" },
+                signal: controller ? controller.signal : undefined
+            });
+        } catch (error) {
+            if (error && error.name === "AbortError") {
+                throw new TimeoutError("O serviço do provedor demorou demais para responder.");
+            }
+            if (error instanceof ProviderError) throw error;
+            const detail = error && error.message ? " (" + error.message + ")" : "";
+            throw new NetworkError("Não foi possível contatar o serviço do provedor" + detail + ". Verifique sua conexão.");
+        } finally {
+            if (timer) clearTimeout(timer);
+        }
+
+        if (response.status === 429) {
+            throw new ProviderError("O serviço do provedor está sobrecarregado no momento.", "rate_limited");
+        }
+        if (response.status === 504 || response.status === 503) {
+            throw new ProviderError("O serviço do provedor excedeu o tempo de espera.", "rate_limited");
+        }
+        if (!response.ok) {
+            throw new ProviderError("O provedor respondeu com erro HTTP " + response.status + ".", "http_" + response.status);
+        }
+
+        try {
+            return await response.json();
+        } catch (error) {
+            throw new ProviderError("Resposta inválida do provedor.", "invalid_response");
+        }
+    }
+
     class NetworkError extends ProviderError {
         constructor(message) {
             super(message || CONFIG.messages.apiError, "network_error");
@@ -307,7 +349,197 @@ const API = (function () {
     }
 
     /* ------------------------------------------------------------------ */
-    /* Provedores reais — todos via proxy serverless                       */
+    /* Provedor OpenStreetMap (Overpass + Nominatim) — dados reais         */
+    /* ------------------------------------------------------------------ */
+    /* Ambos os endpoints respondem com Access-Control-Allow-Origin: *, então
+       a consulta sai direto do navegador: sem chave, sem backend e sem custo.
+       Limitação real: o OSM é mantido por voluntários, então a cobertura de
+       site, telefone e redes sociais varia muito por cidade. */
+
+    async function osmGeocode(query) {
+        const url = CONFIG.osm.nominatim + "?format=jsonv2&limit=1&addressdetails=1&q=" + encodeURIComponent(query);
+        const data = await fetchJson(url, CONFIG.osmTimeoutMs);
+        if (!Array.isArray(data) || !data.length) return null;
+        const hit = data[0];
+        return {
+            latitude: Number(hit.lat),
+            longitude: Number(hit.lon),
+            displayName: hit.display_name,
+            type: hit.type,
+            boundingBox: hit.boundingbox ? hit.boundingbox.map(Number) : null
+        };
+    }
+
+    /* Meio-arredondado do bbox em graus, calculado uma vez por busca. */
+    let BBOX_LAT = 0.027;
+    let BBOX_LON = 0.030;
+
+    function setBboxForRadius(radiusKm, latitude) {
+        const r = Math.max(1, Number(radiusKm) || CONFIG.defaultRadiusKm);
+        BBOX_LAT = r / 111.32;
+        const cos = Math.max(0.2, Math.cos((Number(latitude) * Math.PI) / 180));
+        BBOX_LON = r / (111.32 * cos);
+    }
+
+    /* Monta a consulta Overpass.
+       Cada etiqueta vira uma cláusula independente (OU entre elas). O erro
+       "print cannot be subelement of union" vem de declarar `relation` junto
+       de `node`/`way` na mesma união, então relations vao em bloco próprio. */
+    function buildOsmQuery(params) {
+        const mapping = OSM_TAGS[Utils.categoryKey(params.category || "")] || OSM_GENERIC_TAGS;
+        let keys = Object.keys(mapping).filter(function (key) { return key !== "name"; });
+        if (!keys.length) keys = ["shop"];
+
+        const center = params.center || {};
+        const lat = Number(center.latitude);
+        const lon = Number(center.longitude);
+        const bbox = isFinite(lat) && isFinite(lon)
+            ? "(" + (lat - BBOX_LAT).toFixed(6) + "," + (lon - BBOX_LON).toFixed(6) + "," +
+              (lat + BBOX_LAT).toFixed(6) + "," + (lon + BBOX_LON).toFixed(6) + ")"
+            : "";
+        if (!bbox) return "";
+
+        const limit = Math.min(Number(params.limit) || CONFIG.osmMaxResults, CONFIG.osmMaxResults);
+        const timeout = Math.round(CONFIG.osmTimeoutMs / 1000);
+        const usedKeys = keys.filter(function (k) { return mapping[k] && mapping[k] !== "*"; });
+        if (!usedKeys.length) {
+            throw new ProviderError(
+                "A categoria \"" + (params.category || "") + "\" ainda não tem etiquetas do OpenStreetMap definidas. Adicione o mapeamento em OSM_TAGS, no arquivo js/config.js.",
+                "category_not_mapped"
+            );
+        }
+
+        /* Só node e way. Incluir `relation` no mesmo bloco deixa o Overpass
+           instável (429/504) sem ganho prático: virtually nenhum comércio é
+           mapeado como relação multipolígono. */
+        const clauses = [];
+        usedKeys.forEach(function (key) {
+            const filter = '["' + key + '"="' + mapping[key] + '"]';
+            clauses.push("node" + filter + bbox);
+            clauses.push("way" + filter + bbox);
+        });
+
+        /* Atenção ao ";" final dentro dos parenteses: o Overpass exige o
+           separador antes de fechar a união. Sem ele a resposta é
+           "parse error: ';' expected - ')' found". */
+        return "[out:json][timeout:" + timeout + "];" +
+            "(" + clauses.join(";") + ";);" +
+            "out center tags " + limit + ";";
+    }
+
+    function osmToBusiness(element, params) {
+        const t = element.tags || {};
+        const name = Utils.collapseSpaces(t.name || t["name:pt"] || t.brand || "");
+        const address = [t["addr:street"], t["addr:housenumber"], t["addr:suburb"], t["addr:neighbourhood"]]
+            .filter(function (part) { return part; }).join(", ");
+
+        const cityFromTags = Utils.collapseSpaces(t["addr:city"] || t["addr:town"] || t["addr:county"] || params.city || "");
+        const stateFromTags = Utils.collapseSpaces(t["addr:state"] || params.state || "");
+
+        return {
+            id: "osm-" + element.type + "-" + element.id,
+            provider: "osm",
+            osm_id: element.id,
+            osm_type: element.type,
+            name: name,
+            category: Utils.collapseSpaces(t.shop || t.craft || t.office || t.amenity || t.leisure || params.category || ""),
+            subcategory: Utils.collapseSpaces(t["shop:category"] || ""),
+            country: params.country || "",
+            state: stateFromTags,
+            city: cityFromTags,
+            neighborhood: Utils.collapseSpaces(t["addr:suburb"] || t["addr:neighbourhood"] || params.neighborhood || ""),
+            address: address,
+            postalCode: Utils.collapseSpaces(t["addr:postcode"] || ""),
+            phone: Utils.collapseSpaces(t.phone || t["contact:phone"] || t["contact:mobile"] || ""),
+            /* Atenção: o OSM guarda o site em `website` e também em
+               `contact:website`; ambos passam pela mesma checagem social. */
+            website: Utils.collapseSpaces(t.website || t["contact:website"] || ""),
+            instagram: Utils.collapseSpaces(t["contact:instagram"] || t.instagram || ""),
+            facebook: Utils.collapseSpaces(t["contact:facebook"] || t.facebook || ""),
+            whatsapp: Utils.collapseSpaces(t["contact:whatsapp"] || ""),
+            openingHours: Utils.collapseSpaces(t.opening_hours || ""),
+            latitude: element.lat != null ? element.lat : (element.center ? element.center.lat : ""),
+            longitude: element.lon != null ? element.lon : (element.center ? element.center.lon : ""),
+            rating: "",
+            reviews: "",
+            mapsUrl: "https://www.openstreetmap.org/" + element.type + "/" + element.id
+        };
+    }
+
+    async function osmSearch(params) {
+        let center = params.center || null;
+        if (!center) {
+            const place = [params.city, params.state, params.country].filter(function (p) { return p; }).join(", ");
+            if (place) {
+                center = await osmGeocode(place);
+            }
+        }
+        if (!center) {
+            throw new ProviderError(
+                "Não foi possível localizar \"" + (params.city || params.country || "alocalização") + "\". Tente escrever a cidade de outro formato, por exemplo \"Curitiba, Paraná, Brasil\".",
+                "geocode_failed"
+            );
+        }
+
+        setBboxForRadius(params.radiusKm, center.latitude);
+        const query = buildOsmQuery(Object.assign({}, params, { center: center }));
+        if (!query) {
+            throw new ProviderError("A consulta ao OpenStreetMap não pôde ser montada. Informe cidade ou coordenadas.", "invalid_params");
+        }
+        const data = await overpassQuery(query);
+        const elements = (data && data.elements) || [];
+
+        const items = elements
+            .map(function (element) { return osmToBusiness(element, params); })
+            .filter(function (item) { return item.name; });
+
+        return {
+            provider: "osm",
+            items: items,
+            total: items.length,
+            nextPageToken: "",
+            center: center
+        };
+    }
+
+    async function osmGetDetails(id) {
+        const match = /^(node|way|relation)-(\d+)$/.exec(String(id || ""));
+        if (!match) return null;
+        const query = "[out:json][timeout:15];(" + match[1] + "(" + match[2] + "););out center tags;";
+        const data = await overpassQuery(query);
+        const element = data && data.elements && data.elements[0];
+        return element ? osmToBusiness(element, {}) : null;
+    }
+
+    /* O Overpass é um serviço compartilhado e devolve 429/504 com frequência
+       sob carga. Alterna entre os mirrors e insiste com espera crescente. */
+    async function overpassQuery(query) {
+        const endpoints = [CONFIG.osm.overpass, CONFIG.osm.overpassFallback].filter(Boolean);
+        const maxAttempts = 3;
+        let lastError = null;
+
+        for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
+            const endpoint = endpoints[attempt % endpoints.length];
+            try {
+                return await fetchJson(endpoint + "?data=" + encodeURIComponent(query), CONFIG.osmTimeoutMs);
+            } catch (error) {
+                lastError = error;
+                const retryable = error && (error.code === "rate_limited" || error.code === "timeout" || error.code === "network_error");
+                if (!retryable) throw error;
+                if (attempt < maxAttempts - 1) {
+                    await Utils.delay(1200 * Math.pow(2, attempt));
+                }
+            }
+        }
+
+        if (lastError && lastError.code === "rate_limited") {
+            throw new ProviderError("O OpenStreetMap está sobrecarregado no momento (muitos usuários consultando). Tente novamente em alguns minutos.", "rate_limited");
+        }
+        throw lastError || new ProviderError("O serviço OpenStreetMap não respondeu.", "osm_unavailable");
+    }
+
+    /* ------------------------------------------------------------------ */
+    /* Provedores reais via proxy serverless                                */
     /* ------------------------------------------------------------------ */
 
     function requireProxy(providerName) {
@@ -417,9 +649,9 @@ const API = (function () {
         osm: {
             id: "osm",
             label: "OpenStreetMap (Overpass)",
-            requiresProxy: true,
-            search: proxySearch,
-            getDetails: proxyGetDetails
+            requiresProxy: false,
+            search: osmSearch,
+            getDetails: osmGetDetails
         },
         serpapi: {
             id: "serpapi",
@@ -459,6 +691,13 @@ const API = (function () {
         }
     }
 
+    /* Mensagem de aviso sobre a origem e a confiabilidade dos dados. */
+    function getSourceNotice(providerId) {
+        const id = providerId || CONFIG.provider;
+        if (id === "mock") return "Dados fictícios de demonstração. Use para avaliar a interface, não para contato comercial.";
+        return (CONFIG.sourceNotice && CONFIG.sourceNotice[id]) || "";
+    }
+
     async function getBusinessDetails(id) {
         const provider = getProvider();
         if (!provider.getDetails) return null;
@@ -477,6 +716,7 @@ const API = (function () {
         getCityCenter: mockCenter,
         searchBusinesses: searchBusinesses,
         getBusinessDetails: getBusinessDetails,
+        getSourceNotice: getSourceNotice,
         ProviderError: ProviderError,
         QuotaError: QuotaError,
         NetworkError: NetworkError,

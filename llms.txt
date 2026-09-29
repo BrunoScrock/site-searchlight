@@ -35,9 +35,21 @@ interface em Configurações.
 
 ## Modo demonstração
 
-O projeto funciona sem nenhuma API conectada. O modo mock gera empresas
-fictícias, com distribuição de cenários que exercita todos os estados de
-classificação, e a análise de site é simulada.
+O modo mock gera empresas fictícias, com distribuição de cenários que exercita
+todos os estados de classificação. Serve para avaliar a interface sem depender
+da rede. A tela indica quando está neste modo.
+
+## Fonte dos dados
+
+O sistema consulta a API pública do OpenStreetMap via Overpass e Nominatim.
+Ambos respondem com CORS liberado, então a busca roda direto no navegador sem
+chave de API, sem backend e sem custo. Os dados são reais, cadastrados por
+voluntários.
+
+A cobertura varia bastante entre cidades e categorias: muitas empresas ainda
+não têm telefone, site ou redes sociais mapeados. O sistema sinaliza isso na
+tela e nunca inventa dado. Para a base do Google Maps é necessário o plano pago
+da Google Places API e um proxy serverless.
 
 ## Limitações
 
@@ -46,7 +58,11 @@ política de CORS. Por isso, quando há bloqueio, a empresa é marcada como
 "verificação necessária" em vez de ser classificada automaticamente. Para
 análise mais profunda, use um proxy serverless configurado em js/config.js.
 
-Os dados vêm de provedores externos e podem ter atraso ou imprecisão. Avaliações
+O Overpass é um serviço público compartilhado e pode recusar consultas sob
+carga. O sistema tenta um segundo mirror e repete com espera crescente antes de
+avisar que o serviço está sobrecarregado.
+
+Os dados vêm de fontes externas e podem ter atraso ou imprecisão. Avaliações
 e dados de contato devem ser conferidos antes do uso comercial.
 
 ## Responsabilidade dos dados

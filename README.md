@@ -84,29 +84,59 @@ reescrever a aplicação.
 
 ## Modo demonstração (Mock Mode)
 
-Ativado por padrão (`CONFIG.enableMockData: true`, `CONFIG.provider: "mock"`).
-Gera empresas fictícias com uma distribuição proposital de cenários para
-exercitar todos os estados: site próprio, sem site, apenas redes sociais,
-apenas diretórios, redirecionamento para rede social, página vazia e caso
-duvidoso. Também inclui duplicatas intencionais para testar a remoção de
-duplicados.
+Disponível em `CONFIG.provider = "mock"`. Gera empresas fictícias com uma
+distribuição proposital de cenários para exercitar todos os estados do
+classificador, e a análise de site é **simulada** — empresas e domínios são
+inventados, então uma requisição real falharia sempre.
 
-No mock, a análise de site é **simulada** — empresas e domínios são fictícios,
-então uma requisição real falharia sempre. O banner "Modo demonstração" fica
-visível no topo.
+Quando ativo, o selo no topo muda para "Dados fictícios" em âmbar, e um aviso
+aparece sobre os resultados. É apenas para avaliar a interface, nunca para
+contato comercial.
 
-## Configurar um provedor real
+## Fonte de dados
 
-1. Contrate um provedor com API oficial (Google Places, SerpApi, OpenStreetMap
-   via Overpass, Foursquare, Mapbox, Bing Web Search).
-2. Crie uma função serverless que receba `{ action, params }` e chame a API com
-   a chave guardada como variável de ambiente.
-3. Configure em `js/config.js`:
+### OpenStreetMap via Overpass (padrão, real, grátis)
+
+O sistema consulta a API pública do OpenStreetMap. **Não é dado fictício**: são
+empresas cadastradas por voluntários, com nome, endereço, telefone, site e
+redes sociais reais.
+
+Funciona direto do navegador, **sem chave de API e sem backend**: os endpoints
+respondem com `Access-Control-Allow-Origin: *`, então o site estático do GitHub
+Pages consegue consultar.
+
+- Geocodificação da cidade: `nominatim.openstreetmap.org`
+- Busca por categoria e raio: `overpass-api.de`, com mirror de reserva
+
+**Limitação importante:** a cobertura varia muito. O OSM depende de_municipal
+voluntários, então em cidades menos mapeadas o volume de resultados é pequeno, e
+muitas empresas ainda não têm telefone, site ou redes sociais registrados. O
+sistema mostra um aviso na tela explicando isso, e marca `VERIFY` o que não
+consegue confirmar — nunca inventa dado.
+
+O mapeamento entre as categorias do sistema e as etiquetas do OSM está em
+`OSM_TAGS`, no início do `js/config.js`. Para adicionar categoria nova,
+inclua a entrada ali; sem mapeamento, a busca avisa em vez de devolver lixo.
+
+### Google Maps (opcional, pago)
+
+Para usar a base do Google Maps é obrigatório o plano pago da **Google Places
+API** e um proxy serverless, porque a chave não pode ficar no código público do
+GitHub Pages.
 
 ```javascript
-provider: "google",        // mock | google | osm | serpapi
+provider: "google",
 proxyUrl: "https://api.seudominio.com/places"
 ```
+
+Passos: criar a chave no Google Cloud com restrição de IP, escrever a função
+serverless, e então trocar o `provider`. O restante do sistema não muda.
+
+### Modo demonstração (fictício)
+
+`provider: "mock"` gera empresas fictícias, com 7 cenários que exercitam todos
+os estados do classificador. Serve apenas para avaliar a interface sem depender
+da rede. A tela mostra um aviso indicando que os dados são fictícios.
 
 A interface esperada do proxy:
 
@@ -125,6 +155,8 @@ Cada item deve conter, no mínimo: `id`, `name`, `category`, `address`, `city`,
 - **Vercel Functions / Netlify Functions** — deploy junto com o front.
 - **Supabase Edge Functions** — útil se migrar o armazenamento para Supabase.
 - **Google Cloud Functions** — perto dos dados do Google.
+
+Só é necessário ao usar Google Places ou outro provedor que exija chave.
 
 ## GitHub Pages
 
@@ -206,17 +238,20 @@ sistema cai para armazenamento em memória e avisa nas configurações.
 ## Custos de APIs
 
 - **GitHub Pages** hospeda o frontend sem custo.
-- **O provedor de dados pode ter custo.** Google Places, SerpApi e Foursquare
-  cobram por requisição ou por volume. Estabeleça um teto de gasto no painel do
-  provedor antes de usar em produção.
-- **Chaves restritas** limitam abuso, mas não limitam cobrança. O restriction
-  por domínio é obrigatório.
-- **O modo mock não consome API.** Desenvolva e treine a interface sem custo e
-  só troque o provedor quando a integração estiver validada.
-- Uma função serverless pode ter custo próprio (Cloudflare Workers e Netlify
-  têm cotas gratuitas generosas; Vercel Functions é gratuita em uso baixo).
-- Classifique URLs consome requisições: cada domínio único é buscado no máximo
-  uma vez por pesquisa, com concorrência limitada.
+- **OpenStreetMap / Overpass** são gratuitos e não exigem cadastro. Em troca,
+  a cobertura é menor e o serviço é compartilhado: ele devolve 429/504 quando
+  muitos usuários consultam ao mesmo tempo. O sistema tenta dois mirrors e
+  repete a busca com espera crescente antes de avisar que está sobrecarregado.
+  A fair use da Overpass pede consultas razoáveis — o sistema já limita a
+  120 resultados por busca e 1 consulta de geocodificação por pesquisa.
+- **Google Places** é pago: a API não tem cota gratuita e cobra por requisição,
+  com um plano mensal obrigatório para liberar a chave. Estabeleça teto de gasto
+  no painel antes de usar em produção.
+- **Chaves restritas** limitam abuso, mas não limitam cobrança.
+- **O modo mock não consome API.**
+
+Consumo por busca: 1 chamada ao Nominatim + 1 ao Overpass. Cada domínio único
+encontrado é buscado no máximo uma vez, com concorrência limitada.
 
 ## Acessibilidade
 
