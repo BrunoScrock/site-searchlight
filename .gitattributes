@@ -1,0 +1,14 @@
+# Normaliza as quebras de linha no repositório, independentemente do SO do
+# desenvolvedor. Mantém LF no repositório e converte no checkout no Windows.
+* text=auto eol=lf
+
+*.js   text eol=lf
+*.css  text eol=lf
+*.html text eol=lf
+*.md   text eol=lf
+*.txt  text eol=lf
+*.xml  text eol=lf
+*.svg  text eol=lf
+*.json text eol=lf
+
+*.png binary

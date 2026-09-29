@@ -1,0 +1,56 @@
+# Prospecção Web
+
+Sistema de pesquisa e análise de presença digital de empresas por localização
+e categoria. O objetivo é localizar empresas que possuem presença no Google
+Maps e redes sociais, mas não possuem site próprio, servindo como ferramenta de
+prospecção comercial.
+
+Página: https://github.com/SEU-USUARIO/SEU-REPO
+
+## Como funciona
+
+O usuário informa categoria (e opcionalmente subcategoria e nome), junto com
+país, estado/região, cidade, bairro, CEP ou raio em km. O sistema consulta um
+provedor de dados configurado, normaliza os resultados, remove duplicados e
+classifica a presença digital de cada empresa.
+
+## Estados de classificação
+
+- HAS_WEBSITE — existe site próprio válido, com correspondência confirmada.
+- NO_WEBSITE_SOCIAL — sem site próprio, mas com Instagram, Facebook ou TikTok.
+- NO_WEBSITE — nenhum site, rede social ou diretório informado pelo provedor.
+- REDIRECT_SOCIAL — o domínio informado redireciona para uma rede social.
+- DIRECTORY_ONLY — a única presença é diretório, marketplace ou hospedagem.
+- VERIFY — há uma URL, mas não foi possível confirmar com segurança.
+
+O sistema nunca afirma "sem site" quando a verificação falhou por CORS, timeout
+ou bloqueio: nesses casos o estado é VERIFY, para evitar falsos positivos.
+
+## Regras de classificação
+
+Redes sociais (instagram.com, facebook.com, tiktok.com, linkedin.com etc.) e
+diretórios (Google, Yelp, Tripadvisor, iFood, wixsite.com etc.) nunca contam
+como site próprio. Essas listas ficam em js/config.js e podem ser editadas pela
+interface em Configurações.
+
+## Modo demonstração
+
+O projeto funciona sem nenhuma API conectada. O modo mock gera empresas
+fictícias, com distribuição de cenários que exercita todos os estados de
+classificação, e a análise de site é simulada.
+
+## Limitações
+
+O navegador não consegue ler o conteúdo da maioria dos sites por causa da
+política de CORS. Por isso, quando há bloqueio, a empresa é marcada como
+"verificação necessária" em vez de ser classificada automaticamente. Para
+análise mais profunda, use um proxy serverless configurado em js/config.js.
+
+Os dados vêm de provedores externos e podem ter atraso ou imprecisão. Avaliações
+e dados de contato devem ser conferidos antes do uso comercial.
+
+## Responsabilidade dos dados
+
+Use apenas dados disponibilizados legitimamente pelo provedor contratado e
+respeite os termos de uso. O sistema não contorna CAPTCHAs, bloqueios ou limites
+de requisição, e coleta apenas informações comerciais públicas.

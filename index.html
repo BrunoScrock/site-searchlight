@@ -1,0 +1,503 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Prospecção Web — Encontre Empresas Sem Site</title>
+<meta name="description" content="Sistema de pesquisa e análise de presença digital de empresas por localização e categoria. Encontre empresas com Google Maps, redes sociais e sem site próprio.">
+<meta name="author" content="Prospecção Web">
+<meta name="robots" content="index, follow">
+<meta name="theme-color" content="#4f46e5">
+<meta property="og:type" content="website">
+<meta property="og:title" content="Prospecção Web — Encontre Empresas Sem Site">
+<meta property="og:description" content="Localize empresas por categoria e localização e identifique quais ainda não possuem site próprio.">
+<meta property="og:locale" content="pt_BR">
+<link rel="canonical" href="./index.html">
+<link rel="icon" href="assets/favicon/favicon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="assets/favicon/favicon-180.png">
+<link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+<a class="skip-link" href="#main">Pular para o conteúdo principal</a>
+
+<header class="topbar">
+    <button type="button" class="icon-btn topbar__menu" id="menuToggle" aria-label="Abrir menu" aria-expanded="false" aria-controls="sidebar">
+        <svg class="icon" aria-hidden="true"><use href="#i-menu"></use></svg>
+    </button>
+    <a class="brand" href="#/search">
+        <img src="assets/images/logo/logo.svg" alt="" width="32" height="32" aria-hidden="true">
+        <span class="brand__text">
+            <strong>Prospecção Web</strong>
+            <small>Presença digital em análise</small>
+        </span>
+    </a>
+    <div class="topbar__right">
+        <span class="badge badge--offline" id="offlineBadge" hidden>Sem conexão com a internet.</span>
+        <span class="badge badge--mock" id="providerBadge">Modo demonstração</span>
+    </div>
+</header>
+
+<div class="layout">
+    <nav class="sidebar" id="sidebar" aria-label="Navegação principal">
+        <ul class="sidebar__list">
+            <li><a class="sidebar__link" href="#/search" data-view="search"><svg class="icon" aria-hidden="true"><use href="#i-search"></use></svg><span>Pesquisar</span></a></li>
+            <li><a class="sidebar__link" href="#/results" data-view="results"><svg class="icon" aria-hidden="true"><use href="#i-building"></use></svg><span>Empresas</span></a></li>
+            <li><a class="sidebar__link" href="#/prospects" data-view="prospects"><svg class="icon" aria-hidden="true"><use href="#i-star"></use></svg><span>Prospecções</span><span class="sidebar__count" id="navProspectCount">0</span></a></li>
+            <li><a class="sidebar__link" href="#/dashboard" data-view="dashboard"><svg class="icon" aria-hidden="true"><use href="#i-chart"></use></svg><span>Dashboard</span></a></li>
+            <li><a class="sidebar__link" href="#/exports" data-view="exports"><svg class="icon" aria-hidden="true"><use href="#i-download"></use></svg><span>Exportações</span></a></li>
+            <li><a class="sidebar__link" href="#/settings" data-view="settings"><svg class="icon" aria-hidden="true"><use href="#i-settings"></use></svg><span>Configurações</span></a></li>
+        </ul>
+        <div class="sidebar__footer">
+            <p class="muted small">Os dados ficam salvos apenas neste navegador (localStorage).</p>
+            <p class="muted small" id="sidebarVersion"></p>
+        </div>
+    </nav>
+    <div class="sidebar-backdrop" id="sidebarBackdrop" hidden></div>
+
+    <main class="main" id="main" tabindex="-1">
+
+        <!-- ================= PESQUISA ================= -->
+        <section class="view" id="view-search" data-view="search" aria-labelledby="searchTitle">
+            <div class="hero">
+                <h1 class="hero__title" id="searchTitle">Prospecção Web</h1>
+                <p class="hero__text">Encontre empresas que ainda não possuem um site próprio. Informe a categoria e a localização, analise a presença digital e monte sua lista de prospecção.</p>
+            </div>
+
+            <form class="card card--pad search-form" id="searchForm" novalidate>
+                <div class="search-form__quick">
+                    <div class="field field--lg">
+                        <label class="field__label" for="quickQuery">O que você está procurando?</label>
+                        <div class="field__control">
+                            <svg class="icon field__icon" aria-hidden="true"><use href="#i-search"></use></svg>
+                            <input type="search" id="quickQuery" name="query" list="datalistCategories" placeholder="Mecânicas" autocomplete="off" aria-describedby="quickQueryHint">
+                        </div>
+                        <p class="field__hint" id="quickQueryHint">Escreva uma categoria, serviço ou nome de empresa.</p>
+                    </div>
+
+                    <div class="field field--lg">
+                        <label class="field__label" for="quickLocation">Onde?</label>
+                        <div class="field__control">
+                            <svg class="icon field__icon" aria-hidden="true"><use href="#i-map"></use></svg>
+                            <input type="text" id="quickLocation" name="quickLocation" placeholder="Curitiba, Paraná, Brasil" autocomplete="off" aria-describedby="quickLocationHint">
+                        </div>
+                        <p class="field__hint" id="quickLocationHint">Cidade, estado ou país — separados por vírgula.</p>
+                    </div>
+
+                    <button type="submit" class="btn btn--primary btn--lg search-form__submit">
+                        <svg class="icon" aria-hidden="true"><use href="#i-search"></use></svg>
+                        Buscar empresas
+                    </button>
+                </div>
+
+                <details class="search-form__advanced" id="filtersPanel">
+                    <summary><svg class="icon" aria-hidden="true"><use href="#i-filter"></use></svg> Mais opções: país, estado, bairro, CEP, categoria e raio</summary>
+                    <div class="grid grid--form">
+                        <div class="field">
+                            <label class="field__label" for="country">País</label>
+                            <div class="field__control">
+                                <input type="text" id="country" name="country" list="datalistCountries" value="Brasil" autocomplete="country-name" required>
+                            </div>
+                        </div>
+                        <div class="field">
+                            <label class="field__label" for="state">Estado / Região</label>
+                            <div class="field__control">
+                                <input type="text" id="state" name="state" list="datalistStates" placeholder="Paraná" autocomplete="address-level1">
+                            </div>
+                        </div>
+                        <div class="field">
+                            <label class="field__label" for="city">Cidade</label>
+                            <div class="field__control">
+                                <input type="text" id="city" name="city" list="datalistCities" placeholder="Curitiba" autocomplete="address-level2">
+                            </div>
+                        </div>
+                        <div class="field">
+                            <label class="field__label" for="neighborhood">Bairro / Região</label>
+                            <div class="field__control">
+                                <input type="text" id="neighborhood" name="neighborhood" placeholder="Centro" autocomplete="address-level3">
+                            </div>
+                        </div>
+                        <div class="field">
+                            <label class="field__label" for="postalCode">CEP / Código postal</label>
+                            <div class="field__control">
+                                <input type="text" id="postalCode" name="postalCode" inputmode="numeric" placeholder="80000-000" autocomplete="postal-code">
+                            </div>
+                        </div>
+                        <div class="field">
+                            <label class="field__label" for="category">Categoria</label>
+                            <div class="field__control">
+                                <input type="search" id="category" name="category" list="datalistCategories" placeholder="Mecânicas" autocomplete="off">
+                            </div>
+                        </div>
+                        <div class="field">
+                            <label class="field__label" for="subcategory">Subcategoria (opcional)</label>
+                            <div class="field__control">
+                                <input type="text" id="subcategory" name="subcategory" placeholder="Injeção eletrônica">
+                            </div>
+                        </div>
+                        <div class="field">
+                            <label class="field__label" for="radiusKm">Raio de distância</label>
+                            <div class="field__control">
+                                <select id="radiusKm" name="radiusKm">
+                                    <option value="">Sem raio definido</option>
+                                </select>
+                            </div>
+                            <p class="field__hint">Opcional. Com raio, o provedor é instruído a buscar apenas empresas dentro dele.</p>
+                        </div>
+                    </div>
+                    <fieldset class="field field--advanced-coords">
+                        <legend>Centro da busca (opcional)</legend>
+                        <div class="grid grid--form">
+                            <div class="field">
+                                <label class="field__label" for="centerLat">Latitude</label>
+                                <div class="field__control">
+                                    <input type="number" id="centerLat" name="centerLat" step="0.000001" placeholder="-25.4284" inputmode="decimal">
+                                </div>
+                            </div>
+                            <div class="field">
+                                <label class="field__label" for="centerLng">Longitude</label>
+                                <div class="field__control">
+                                    <input type="number" id="centerLng" name="centerLng" step="0.000001" placeholder="-49.2733" inputmode="decimal">
+                                </div>
+                            </div>
+                        </div>
+                        <p class="field__hint">Informe o centro apenas se quiser calcular a distância de cada empresa. No modo demonstração, as cidades com centro conhecido já são calculadas automaticamente.</p>
+                    </fieldset>
+                    <div class="category-picker" id="categoryList" aria-label="Categorias sugeridas"></div>
+                </details>
+            </form>
+
+            <section class="card card--pad" aria-labelledby="historyTitle">
+                <h2 class="card__title" id="historyTitle"><svg class="icon" aria-hidden="true"><use href="#i-history"></use></svg> Histórico de pesquisas <span class="badge" id="historyCount">0</span></h2>
+                <div id="historyList"></div>
+            </section>
+        </section>
+
+        <!-- ================= RESULTADOS ================= -->
+        <section class="view" id="view-results" data-view="results" aria-labelledby="resultsTitle" hidden>
+            <div class="toolbar" id="resultsToolbar">
+                <div>
+                    <h1 class="toolbar__title" id="resultsTitle">Empresas encontradas</h1>
+                    <p class="muted" id="resultsSummary"></p>
+                </div>
+                <div class="toolbar__actions">
+                    <span class="muted" id="resultCount"></span>
+                    <button type="button" class="btn btn--soft btn--sm" data-export="results">
+                        <svg class="icon" aria-hidden="true"><use href="#i-download"></use></svg> Exportar CSV
+                    </button>
+                </div>
+            </div>
+            <p class="muted small" id="duplicatesNote"></p>
+
+            <div class="stats" id="statsRow"></div>
+
+            <form class="card card--pad filters" id="filterForm" role="search" aria-label="Filtros de resultados">
+                <div class="filters__row">
+                    <div class="field field--sm">
+                        <label class="field__label" for="filterQuery">Palavra-chave</label>
+                        <input type="search" id="filterQuery" name="query" placeholder="Nome, categoria, endereço">
+                    </div>
+                    <div class="field field--sm">
+                        <label class="field__label" for="filterCategory">Categoria</label>
+                        <input type="text" id="filterCategory" name="category" placeholder="Mecânicas">
+                    </div>
+                    <div class="field field--sm">
+                        <label class="field__label" for="filterCity">Cidade</label>
+                        <input type="text" id="filterCity" name="city" placeholder="Curitiba">
+                    </div>
+                    <div class="field field--sm">
+                        <label class="field__label" for="filterRadius">Raio (km)</label>
+                        <input type="number" id="filterRadius" name="radiusKm" min="1" max="200" step="1" placeholder="10">
+                    </div>
+                </div>
+                <div class="filters__row">
+                    <div class="field field--sm">
+                        <label class="field__label" for="filterHasWebsite">Possui site</label>
+                        <select id="filterHasWebsite" name="hasWebsite">
+                            <option value="any">Todas</option>
+                            <option value="yes">Com site</option>
+                            <option value="no">Sem site</option>
+                        </select>
+                    </div>
+                    <div class="field field--sm">
+                        <label class="field__label" for="filterStatus">Classificação</label>
+                        <select id="filterStatus" name="status">
+                            <option value="">Todas</option>
+                            <option value="HAS_WEBSITE">Site encontrado</option>
+                            <option value="NO_WEBSITE">Sem site identificado</option>
+                            <option value="NO_WEBSITE_SOCIAL">Sem site, com redes sociais</option>
+                            <option value="REDIRECT_SOCIAL">Redireciona para rede social</option>
+                            <option value="DIRECTORY_ONLY">Apenas diretórios</option>
+                            <option value="VERIFY">Verificação necessária</option>
+                        </select>
+                    </div>
+                    <div class="field field--sm">
+                        <label class="field__label" for="filterMinRating">Avaliação mínima</label>
+                        <input type="number" id="filterMinRating" name="minRating" min="0" max="5" step="0.1" placeholder="4.0">
+                    </div>
+                    <div class="field field--sm">
+                        <label class="field__label" for="filterMinReviews">Mín. de avaliações</label>
+                        <input type="number" id="filterMinReviews" name="minReviews" min="0" step="1" placeholder="10">
+                    </div>
+                    <div class="field field--sm">
+                        <label class="field__label" for="filterSort">Ordenar por</label>
+                        <select id="filterSort" name="sort">
+                            <option value="relevance">Relevância do provedor</option>
+                            <option value="score">Perfil para prospecção</option>
+                            <option value="reviews">Quantidade de avaliações</option>
+                            <option value="rating">Avaliação</option>
+                            <option value="name">Nome (A–Z)</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="filters__checks">
+                    <label class="check" for="filterInstagram">
+                        <input type="checkbox" id="filterInstagram" name="instagram">
+                        <span>Possui Instagram</span>
+                    </label>
+                    <label class="check" for="filterFacebook">
+                        <input type="checkbox" id="filterFacebook" name="facebook">
+                        <span>Possui Facebook</span>
+                    </label>
+                    <button type="button" class="btn btn--ghost btn--sm" id="clearFilters">
+                        <svg class="icon" aria-hidden="true"><use href="#i-close"></use></svg> Limpar filtros
+                    </button>
+                </div>
+            </form>
+
+            <div class="tabs" id="resultsTabs" role="tablist" aria-label="Filtrar resultados por status do site"></div>
+
+            <div class="results" id="resultsContainer" aria-live="polite" aria-busy="false"></div>
+            <div class="empty" id="emptyResults" hidden></div>
+            <nav class="pagination" id="pagination" aria-label="Paginação de resultados"></nav>
+            <p class="muted small center" id="analysisNote"></p>
+        </section>
+
+        <!-- ================= PROSPECÇÕES ================= -->
+        <section class="view" id="view-prospects" data-view="prospects" aria-labelledby="prospectsTitle" hidden>
+            <div class="toolbar">
+                <div>
+                    <h1 class="toolbar__title" id="prospectsTitle">Minhas prospecções</h1>
+                    <p class="muted">Empresas salvas com status de contato e observações. Tudo fica salvo apenas neste navegador.</p>
+                </div>
+                <div class="toolbar__actions">
+                    <button type="button" class="btn btn--soft btn--sm" data-export="prospects">
+                        <svg class="icon" aria-hidden="true"><use href="#i-download"></use></svg> Exportar CSV
+                    </button>
+                </div>
+            </div>
+            <div class="card card--pad filters" id="prospectsFilters">
+                <div class="filters__row">
+                    <div class="field field--sm">
+                        <label class="field__label" for="prospectQuery">Buscar na lista</label>
+                        <input type="search" id="prospectQuery" placeholder="Nome, categoria ou cidade">
+                    </div>
+                    <div class="field field--sm">
+                        <label class="field__label" for="prospectStatus">Status do contato</label>
+                        <select id="prospectStatus">
+                            <option value="">Todos</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div id="prospectsContainer"></div>
+        </section>
+
+        <!-- ================= DASHBOARD ================= -->
+        <section class="view" id="view-dashboard" data-view="dashboard" aria-labelledby="dashboardTitle" hidden>
+            <div class="toolbar">
+                <div>
+                    <h1 class="toolbar__title" id="dashboardTitle">Dashboard de prospecção</h1>
+                    <p class="muted">Indicadores calculados a partir dos registros locais deste navegador.</p>
+                </div>
+            </div>
+            <div class="stats stats--dashboard" id="dashboardGrid"></div>
+            <div class="card card--pad">
+                <h2 class="card__title"><svg class="icon" aria-hidden="true"><use href="#i-filter"></use></svg> Funil de contato</h2>
+                <div id="pipeline"></div>
+            </div>
+            <div class="card card--pad">
+                <h2 class="card__title"><svg class="icon" aria-hidden="true"><use href="#i-history"></use></svg> Histórico</h2>
+                <div id="historyListDashboard"></div>
+            </div>
+        </section>
+
+        <!-- ================= EXPORTAÇÕES ================= -->
+        <section class="view" id="view-exports" data-view="exports" aria-labelledby="exportsTitle" hidden>
+            <div class="toolbar">
+                <div>
+                    <h1 class="toolbar__title" id="exportsTitle">Exportações</h1>
+                    <p class="muted">Gere arquivos CSV para Excel ou Google Sheets e faça backup dos dados locais.</p>
+                </div>
+            </div>
+            <div id="exportsPanel"></div>
+        </section>
+
+        <!-- ================= CONFIGURAÇÕES ================= -->
+        <section class="view" id="view-settings" data-view="settings" aria-labelledby="settingsTitle" hidden>
+            <div class="toolbar">
+                <div>
+                    <h1 class="toolbar__title" id="settingsTitle">Configurações</h1>
+                    <p class="muted">Provedor de dados, proxy, domínios de rede social e diretório, e manutenção dos dados locais.</p>
+                </div>
+            </div>
+
+            <form class="card card--pad" id="settingsForm">
+                <h2 class="card__title"><svg class="icon" aria-hidden="true"><use href="#i-settings"></use></svg> Provedor de dados</h2>
+                <div class="grid grid--form">
+                    <div class="field">
+                        <label class="field__label" for="cfgProvider">Provedor</label>
+                        <select id="cfgProvider" name="provider"></select>
+                        <p class="field__hint" id="proxyHint"></p>
+                    </div>
+                    <div class="field">
+                        <label class="field__label" for="cfgProxyUrl">URL do proxy serverless</label>
+                        <input type="url" id="cfgProxyUrl" name="proxyUrl" placeholder="https://api.seudominio.com/places" autocomplete="off">
+                        <p class="field__hint">Nunca coloque chaves secretas no repositório. Use um proxy (Cloudflare Workers, Vercel, Netlify, Supabase Edge).</p>
+                    </div>
+                    <div class="field">
+                        <label class="field__label" for="cfgProxyToken">Token de sessão do proxy (opcional)</label>
+                        <input type="password" id="cfgProxyToken" name="proxyToken" autocomplete="off" placeholder="Deixe em branco se não usar">
+                    </div>
+                    <div class="field">
+                        <label class="field__label" for="cfgTimeout">Tempo limite (segundos)</label>
+                        <input type="number" id="cfgTimeout" name="timeout" min="2" max="60" step="1">
+                    </div>
+                    <div class="field">
+                        <label class="field__label" for="cfgCacheTtl">Validade do cache (minutos)</label>
+                        <input type="number" id="cfgCacheTtl" name="cacheTtl" min="1" max="1440" step="1">
+                    </div>
+                    <div class="field">
+                        <label class="field__label" for="cfgMaxResults">Máximo de empresas por busca</label>
+                        <input type="number" id="cfgMaxResults" name="maxResults" min="10" max="1000" step="10">
+                    </div>
+                    <div class="field">
+                        <label class="field__label" for="cfgRadius">Raio padrão (km)</label>
+                        <input type="number" id="cfgRadius" name="radius" min="1" max="200" step="1">
+                    </div>
+                </div>
+                <div class="filters__checks">
+                    <label class="check" for="cfgAnalyze"><input type="checkbox" id="cfgAnalyze" name="analyze"><span>Analisar sites automaticamente</span></label>
+                    <label class="check" for="cfgCache"><input type="checkbox" id="cfgCache" name="cache"><span>Usar cache local de resultados</span></label>
+                    <label class="check" for="cfgMock"><input type="checkbox" id="cfgMock" name="mock"><span>Manter modo demonstração disponível</span></label>
+                </div>
+                <div class="field">
+                    <label class="field__label" for="cfgWhatsapp">Mensagem do WhatsApp</label>
+                    <textarea id="cfgWhatsapp" name="whatsapp" rows="2"></textarea>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn--primary">Salvar configurações</button>
+                </div>
+            </form>
+
+            <form class="card card--pad" id="domainsForm">
+                <h2 class="card__title"><svg class="icon" aria-hidden="true"><use href="#i-globe"></use></svg> Domínios de rede social e diretórios</h2>
+                <p class="muted">Uma linha por domínio. Estes domínios nunca contam como site próprio.</p>
+                <div class="grid grid--form">
+                    <div class="field">
+                        <label class="field__label" for="cfgSocialDomains">Redes sociais</label>
+                        <textarea id="cfgSocialDomains" name="socialDomains" rows="8" spellcheck="false"></textarea>
+                    </div>
+                    <div class="field">
+                        <label class="field__label" for="cfgDirectoryDomains">Diretórios e marketplaces</label>
+                        <textarea id="cfgDirectoryDomains" name="directoryDomains" rows="8" spellcheck="false"></textarea>
+                    </div>
+                </div>
+                <div class="form-actions">
+                    <button type="submit" class="btn btn--primary">Salvar listas de domínios</button>
+                </div>
+            </form>
+
+            <div class="card card--pad">
+                <h2 class="card__title"><svg class="icon" aria-hidden="true"><use href="#i-folder"></use></svg> Dados locais</h2>
+                <p class="muted" id="storageUsage"></p>
+                <div class="row-actions">
+            <button type="button" class="btn btn--soft btn--sm" id="exportJson"><svg class="icon" aria-hidden="true"><use href="#i-download"></use></svg> Exportar backup JSON</button>
+            <label class="btn btn--soft btn--sm" for="importInput">Importar backup JSON</label>
+                    <input type="file" id="importInput" accept="application/json,.json" class="sr-only">
+                    <button type="button" class="btn btn--ghost btn--sm" data-clear="cache">Limpar cache</button>
+                    <button type="button" class="btn btn--ghost btn--sm" data-clear="history">Limpar histórico</button>
+                    <button type="button" class="btn btn--danger btn--sm" data-clear="all">Apagar tudo</button>
+                </div>
+            </div>
+
+            <div class="card card--pad">
+                <h2 class="card__title"><svg class="icon" aria-hidden="true"><use href="#i-info"></use></svg> Responsabilidade dos dados</h2>
+                <p class="muted">Use apenas dados disponibilizados legitimamente pelo provedor contratado, respeitando os termos de uso. O sistema não contorna CAPTCHAs, bloqueios ou limites de requisições, e não coleta dados pessoais além de informações comerciais públicas (nome comercial, endereço, telefone, site, redes e avaliações agregadas).</p>
+            </div>
+        </section>
+    </main>
+</div>
+
+<div class="modal" id="modal" hidden>
+    <div class="modal__backdrop" data-action="close-modal"></div>
+    <div class="modal__dialog" role="dialog" aria-modal="true" aria-labelledby="modal-title" tabindex="-1">
+        <div id="modalContent" class="modal__content"></div>
+    </div>
+</div>
+
+<div class="toasts" id="toasts" aria-live="polite" aria-atomic="false"></div>
+<div class="sr-only" id="liveRegion" aria-live="polite" role="status"></div>
+
+<datalist id="datalistCategories"></datalist>
+<datalist id="datalistCountries"></datalist>
+<datalist id="datalistStates"></datalist>
+<datalist id="datalistCities"></datalist>
+
+<svg class="sprite" aria-hidden="true" focusable="false" xmlns="http://www.w3.org/2000/svg">
+    <defs>
+        <style>
+            .sprite { display: none; }
+            .icon { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; flex: none; }
+            .icon--fill { fill: currentColor; stroke: none; }
+        </style>
+    </defs>
+    <symbol id="i-menu" viewBox="0 0 24 24"><path d="M4 6h16M4 12h16M4 18h16"/></symbol>
+    <symbol id="i-close" viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="M16.5 16.5L21 21"/></symbol>
+    <symbol id="i-map" viewBox="0 0 24 24"><path d="M12 21s-7-5.6-7-11a7 7 0 1 1 14 0c0 5.4-7 11-7 11z"/><circle cx="12" cy="10" r="2.6"/></symbol>
+    <symbol id="i-filter" viewBox="0 0 24 24"><path d="M3 5h18l-7 8v6l-4 2v-8L3 5z"/></symbol>
+    <symbol id="i-building" viewBox="0 0 24 24"><path d="M4 21V6l7-3 7 3v15"/><path d="M9 21v-5h4v5"/><path d="M8 9h1M8 13h1M14 9h1M14 13h1"/></symbol>
+    <symbol id="i-star" viewBox="0 0 24 24"><path d="M12 4l2.4 4.9 5.4.8-3.9 3.8.9 5.4-4.8-2.5-4.8 2.5.9-5.4L4.2 9.7l5.4-.8L12 4z"/></symbol>
+    <symbol id="i-chart" viewBox="0 0 24 24"><path d="M4 20h16"/><path d="M7 20v-6M12 20V8M17 20v-9"/></symbol>
+    <symbol id="i-download" viewBox="0 0 24 24"><path d="M12 4v10"/><path d="M8 11l4 4 4-4"/><path d="M4 19h16"/></symbol>
+    <symbol id="i-settings" viewBox="0 0 24 24"><circle cx="12" cy="12" r="3.2"/><path d="M12 3v2.4M12 18.6V21M3 12h2.4M18.6 12H21M5.6 5.6l1.7 1.7M16.7 16.7l1.7 1.7M18.4 5.6l-1.7 1.7M7.3 16.7l-1.7 1.7"/></symbol>
+    <symbol id="i-history" viewBox="0 0 24 24"><path d="M4 12a8 8 0 1 0 2.5-5.8"/><path d="M4 4v4h4"/><path d="M12 8v4l3 2"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></symbol>
+    <symbol id="i-alert" viewBox="0 0 24 24"><path d="M12 4l9 16H3l9-16z"/><path d="M12 10v4M12 17.2v.1"/></symbol>
+    <symbol id="i-info" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M12 11v5M12 8.2v.1"/></symbol>
+    <symbol id="i-help" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M9.6 9.5a2.5 2.5 0 1 1 3.3 2.4c-.6.2-.9.8-.9 1.4v.4"/><path d="M12 17v.1"/></symbol>
+    <symbol id="i-ban" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M6 6l12 12"/></symbol>
+    <symbol id="i-redirect" viewBox="0 0 24 24"><path d="M4 17h9a4 4 0 0 0 0-8H8"/><path d="M11 6L8 9l3 3"/></symbol>
+    <symbol id="i-globe" viewBox="0 0 24 24"><circle cx="12" cy="12" r="8.5"/><path d="M3.5 12h17"/><path d="M12 3.5c2.2 2.4 3.3 5.4 3.3 8.5S14.2 18.1 12 20.5c-2.2-2.4-3.3-5.4-3.3-8.5S9.8 5.9 12 3.5z"/></symbol>
+    <symbol id="i-phone" viewBox="0 0 24 24"><path d="M5 4h4l2 5-2.5 1.5a11 11 0 0 0 5 5L15 13l5 2v4a1.6 1.6 0 0 1-1.8 1.6A15.5 15.5 0 0 1 3.4 5.8 1.6 1.6 0 0 1 5 4z"/></symbol>
+    <symbol id="i-instagram" viewBox="0 0 24 24"><rect x="4" y="4" width="16" height="16" rx="4.5"/><circle cx="12" cy="12" r="3.6"/><circle cx="17" cy="7" r=".9" fill="currentColor"/></symbol>
+    <symbol id="i-facebook" viewBox="0 0 24 24"><path d="M14 8.5V7a1.5 1.5 0 0 1 1.5-1.5H17V3h-2.5A4 4 0 0 0 10.5 7v1.5H8V12h2.5v9H14v-9h2.5l.5-3.5H14z"/></symbol>
+    <symbol id="i-whatsapp" viewBox="0 0 24 24"><path d="M4 20l1.3-4A7.9 7.9 0 1 1 8 18.7L4 20z"/><path d="M9 9.5c0 3 2.5 5.5 5.5 5.5.6 0 1-.4 1-1l-.2-1.2-1.6-.6-.9 1a6.6 6.6 0 0 1-2.9-2.9l1-.9-.6-1.6L9.2 8.4c-.6 0-1 .4-1 1z"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><rect x="9" y="9" width="11" height="11" rx="2.4"/><path d="M15 6.5A2.5 2.5 0 0 0 12.5 4H6.5A2.5 2.5 0 0 0 4 6.5v6A2.5 2.5 0 0 0 6.5 15"/></symbol>
+    <symbol id="i-chevron-left" viewBox="0 0 24 24"><path d="M14 6l-6 6 6 6"/></symbol>
+    <symbol id="i-chevron-right" viewBox="0 0 24 24"><path d="M10 6l6 6-6 6"/></symbol>
+    <symbol id="i-refresh" viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.6-5.9"/><path d="M20 4v4.5h-4.5"/></symbol>
+    <symbol id="i-trash" viewBox="0 0 24 24"><path d="M4 7h16"/><path d="M9 7V5h6v2"/><path d="M6 7l1 13h10l1-13"/><path d="M10 11v6M14 11v6"/></symbol>
+    <symbol id="i-edit" viewBox="0 0 24 24"><path d="M4 20h4l10-10-4-4L4 16v4z"/><path d="M14 6l4 4"/></symbol>
+    <symbol id="i-tag" viewBox="0 0 24 24"><path d="M11 3H4v7l10 10 7-7L11 3z"/><circle cx="7.5" cy="6.5" r="1.2"/></symbol>
+    <symbol id="i-gauge" viewBox="0 0 24 24"><path d="M4 18a8 8 0 1 1 16 0"/><path d="M12 18l4-5"/></symbol>
+    <symbol id="i-magic" viewBox="0 0 24 24"><path d="M5 19L16 8"/><path d="M14 4l.8 2.2L17 7l-2.2.8L14 10l-.8-2.2L11 7l2.2-.8L14 4z"/><path d="M19 12l.6 1.6L21 14l-1.4.4L19 16l-.6-1.6L17 14l1.4-.4L19 12z"/></symbol>
+    <symbol id="i-heart" viewBox="0 0 24 24"><path d="M12 20s-7-4.4-7-9.2A3.9 3.9 0 0 1 12 8a3.9 3.9 0 0 1 7 2.8C19 15.6 12 20 12 20z"/></symbol>
+    <symbol id="i-trophy" viewBox="0 0 24 24"><path d="M8 4h8v5a4 4 0 0 1-8 0V4z"/><path d="M8 5H5v2a3 3 0 0 0 3 3M16 5h3v2a3 3 0 0 1-3 3"/><path d="M12 13v4M9 20h6"/></symbol>
+    <symbol id="i-folder" viewBox="0 0 24 24"><path d="M4 7h5l2 2h9v9a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V7z"/></symbol>
+    <symbol id="i-briefcase" viewBox="0 0 24 24"><rect x="3" y="7" width="18" height="12" rx="2.4"/><path d="M9 7V5h6v2"/><path d="M3 12h18"/></symbol>
+    <symbol id="i-sparkles" viewBox="0 0 24 24"><path d="M10 4l1.2 3.2L14.5 8.5 11.2 9.8 10 13l-1.2-3.2L5.5 8.5 8.8 7.2 10 4z"/><path d="M17 12l.8 2.2 2.2.8-2.2.8-.8 2.2-.8-2.2-2.2-.8 2.2-.8.8-2.2z"/></symbol>
+    <symbol id="i-users" viewBox="0 0 24 24"><circle cx="9" cy="8.5" r="3.2"/><path d="M3.5 19a5.5 5.5 0 0 1 11 0"/><path d="M16 6.2a3.2 3.2 0 0 1 0 6.1M17 14.4a5.5 5.5 0 0 1 3.5 4.6"/></symbol>
+    <symbol id="i-external" viewBox="0 0 24 24"><path d="M14 5h5v5"/><path d="M19 5l-7 7"/><path d="M18 14v4a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4"/></symbol>
+</svg>
+
+<script src="js/config.js" defer></script>
+<script src="js/utils.js" defer></script>
+<script src="js/classifier.js" defer></script>
+<script src="js/api.js" defer></script>
+<script src="js/storage.js" defer></script>
+<script src="js/search.js" defer></script>
+<script src="js/ui.js" defer></script>
+<script src="js/app.js" defer></script>
+</body>
+</html>

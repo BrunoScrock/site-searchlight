@@ -1,0 +1,43 @@
+# Dependências
+node_modules/
+package-lock.json
+yarn.lock
+
+# Variáveis de ambiente e segredos (nunca versionar)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+secrets.json
+
+# Sistema operacional
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Editores
+.vscode/
+.idea/
+*.swp
+
+# Logs e temporários
+*.log
+npm-debug.log*
+.cache/
+tmp/
+dist/
+build/
+
+# Deploy / serverless
+.netlify/
+.vercel/
+.wrangler/
+functions/.mf/
+
+# Bancos e backups locais
+*.sqlite
+*.sqlite3
+*.db
+backup-*.json
+prospeccao-web-*.csv
