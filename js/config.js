@@ -53,11 +53,15 @@ const CONFIG = {
     },
 
     /* Overpass é um serviço compartilhado e costuma recusar carga excessiva.
-       Os limites abaixo evitam que uma busca trave a interface. */
-    osmTimeoutMs: 45000,
+       Os limites abaixo evitam que uma busca trave a interface.
+
+       osmTimeoutMs vale por requisição; osmSearchBudgetMs é o teto da busca
+       inteira, para que a interface nunca fique em "carregando" sem fim. */
+    osmTimeoutMs: 20000,
+    osmSearchBudgetMs: 60000,
     osmMaxResults: 120,
     osmResultSeconds: 180,
-    osmAttemptsPerMirror: 2,
+    osmAttemptsPerMirror: 1,
 
     /* Cabeçalho opcional enviado ao proxy. Prefira um token de uso único por
        sessão gerado localmente; nunca versione um segredo real aqui. */

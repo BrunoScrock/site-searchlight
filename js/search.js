@@ -274,7 +274,7 @@ const Search = (function () {
                 const normalized = (result.items || []).slice(0, CONFIG.maxResultsPerSearch).map(function (raw) {
                     return normalizeBusiness(raw, result.provider);
                 });
-                payload = { items: normalized, total: result.total || normalized.length, provider: result.provider };
+                payload = { items: normalized, total: result.total || normalized.length, provider: result.provider, remark: result.remark || "" };
                 Store.setCached(key, payload);
             } else {
                 fromCache = true;
@@ -294,6 +294,7 @@ const Search = (function () {
             state.summary.duplicatesRemoved = deduped.removed;
             state.summary.provider = payload.provider;
             state.summary.fromCache = fromCache;
+            state.summary.remark = payload.remark || "";
 
             Store.addHistory({ params: params, total: state.summary.total, summary: state.summary });
             Store.recordSearch(state.summary);
@@ -323,6 +324,13 @@ const Search = (function () {
                 kind: "blocked",
                 message: error.message,
                 detail: "Se você está em uma rede corporativa, é comum o proxy bloquear APIs públicas. Nesse caso, use uma rede sem proxy ou configure um provedor próprio em Configurações."
+            };
+        }
+        if (error && error.code === "osm_deadline") {
+            return {
+                kind: "timeout",
+                message: error.message || "A consulta ao OpenStreetMap demorou demais.",
+                detail: "Isso costuma acontecer quando o serviço está sobrecarregado. Tente novamente em alguns minutos ou reduza o raio da busca."
             };
         }
         if (error instanceof API.QuotaError) {

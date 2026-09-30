@@ -376,8 +376,13 @@ const UI = (function () {
 
         if (!state.results.length) {
             if (els.emptyResults) els.emptyResults.hidden = false;
+            const todosVazios = state.summary && state.summary.remark === "todos_vazios";
             setHtml(els.resultsContainer, '<div class="empty">' + icon("search") +
-                "<h3>Nenhuma empresa encontrada</h3><p>" + Utils.escapeHtml(CONFIG.messages.noResults) + "</p></div>");
+                "<h3>Nenhuma empresa encontrada</h3>" +
+                "<p>" + (todosVazios
+                    ? "Os servidores do OpenStreetMap responderam sem nenhuma empresa para esta categoria neste raio. É comum: a cobertura do OSM depende de contribution voluntária e varia muito."
+                    : Utils.escapeHtml(CONFIG.messages.noResults)) + "</p>" +
+                '<p class="muted">Tente aumentar o raio, escolher outra categoria ou consultar outra cidade.</p></div>');
             if (els.resultsContainer) els.resultsContainer.setAttribute("aria-busy", "false");
             renderPagination(page);
             return;

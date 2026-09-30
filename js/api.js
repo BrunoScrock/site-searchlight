@@ -527,7 +527,11 @@ const API = (function () {
         if (!query) {
             throw new ProviderError("A consulta ao OpenStreetMap não pôde ser montada. Informe cidade ou coordenadas.", "invalid_params");
         }
-        const data = await overpassQuery(query);
+        const data = await withDeadline(
+            overpassQuery(query),
+            CONFIG.osmSearchBudgetMs,
+            "A consulta ao OpenStreetMap demorou demais. O serviço pode estar sobrecarregado — tente novamente em alguns minutos."
+        );
         const elements = (data && data.elements) || [];
 
         const items = elements
@@ -539,7 +543,8 @@ const API = (function () {
             items: items,
             total: items.length,
             nextPageToken: "",
-            center: center
+            center: center,
+            remark: data && data.remark ? data.remark : ""
         };
     }
 
@@ -550,6 +555,24 @@ const API = (function () {
         const data = await overpassQuery(query);
         const element = data && data.elements && data.elements[0];
         return element ? osmToBusiness(element, {}) : null;
+    }
+
+    /* Teto de tempo para a busca inteira. Sem ele, uma sequência de mirrors
+       lentos (45s de timeout cada, vezes 3 mirrors) pode passar de 2 minutos
+       e a interface fica com "carregando" para sempre. */
+    function withDeadline(promise, budgetMs, message) {
+        return new Promise(function (resolve, reject) {
+            let done = false;
+            const timer = setTimeout(function () {
+                if (done) return;
+                done = true;
+                reject(new ProviderError(message, "osm_deadline"));
+            }, budgetMs);
+            promise.then(
+                function (value) { if (!done) { done = true; clearTimeout(timer); resolve(value); } },
+                function (error) { if (!done) { done = true; clearTimeout(timer); reject(error); } }
+            );
+        });
     }
 
     /* Percorre os mirrors do Overpass até um devolver empresas.
@@ -572,11 +595,18 @@ const API = (function () {
         let sawRateLimit = false;
         let lastError = null;
 
+        /* Tempo por mirror: no máximo metade do orçamento, para sobrar margem. */
+        const perMirrorTimeout = Math.max(8000, Math.round(CONFIG.osmTimeoutMs * 0.6));
+
         for (let m = 0; m < mirrors.length; m += 1) {
             const mirror = mirrors[m];
             for (let attempt = 0; attempt < perMirror; attempt += 1) {
                 try {
-                    const data = await fetchJson(mirror + "?data=" + encodeURIComponent(query), CONFIG.osmTimeoutMs);
+                    const data = await withDeadline(
+                        fetchJson(mirror + "?data=" + encodeURIComponent(query), perMirrorTimeout),
+                        perMirrorTimeout + 2000,
+                        "O mirror " + mirror.replace("https://", "").split("/")[0] + " demorou demais."
+                    );
                     const elements = (data && data.elements) || [];
                     if (!wantsResults || elements.length) {
                         return data;
@@ -590,7 +620,7 @@ const API = (function () {
                         blocked.push.apply(blocked, error.blockedHosts);
                         break;
                     }
-                    if (error && (error.code === "rate_limited" || error.code === "timeout" || error.code === "network_error")) {
+                    if (error && (error.code === "rate_limited" || error.code === "timeout" || error.code === "network_error" || error.code === "osm_deadline")) {
                         sawRateLimit = true;
                         break;
                     }
