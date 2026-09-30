@@ -17,9 +17,8 @@ const APP = (function () {
         UI.renderDashboard();
         bindEvents();
         updateProviderBadge();
-        updateConnectivity();
+        UI.updateConnectivityBadge();
         handleRoute();
-        Store.getPrefs();
     }
 
     /* ---------- preferências ---------- */
@@ -109,6 +108,7 @@ const APP = (function () {
             });
             UI.renderResults();
             UI.syncFilterInputs(Search.getState().filters);
+            UI.updateConnectivityBadge();
             UI.announce(result.results.length + " empresas encontradas. " + result.summary.withoutWebsite + " sem site próprio, " + result.summary.needsVerification + " precisam de verificação.");
             if (result.summary.duplicatesRemoved) {
                 UI.toast(result.summary.duplicatesRemoved + " duplicado(s) removido(s) automaticamente.", "info");
@@ -529,8 +529,15 @@ const APP = (function () {
             if (event.key === "Tab" && !UI.els.modal.hidden) trapFocus(event);
         });
 
-        window.addEventListener("online", updateConnectivity);
-        window.addEventListener("offline", updateConnectivity);
+        window.addEventListener("online", function () {
+            /* interface de rede voltou: o estado real só se confirma na
+               próxima requisição, então não forçamos "online" aqui. */
+            UI.updateConnectivityBadge();
+        });
+        window.addEventListener("offline", function () {
+            API.setConnectivity("offline");
+            UI.updateConnectivityBadge();
+        });
         window.addEventListener("resize", Utils.debounce(function () {
             if (window.innerWidth > 1024) UI.closeSidebar();
         }, 200));
@@ -701,16 +708,6 @@ const APP = (function () {
         badge.classList.toggle("badge--mock", isMock);
         badge.classList.toggle("badge--live", !isMock);
         badge.title = API.getSourceNotice(CONFIG.provider) || (provider ? provider.label : "");
-    }
-
-    function updateConnectivity() {
-        const badge = UI.els.offlineBadge;
-        const online = navigator.onLine;
-        if (badge) {
-            badge.hidden = online;
-            badge.textContent = CONFIG.messages.offline;
-        }
-        document.body.classList.toggle("is-offline", !online);
     }
 
     document.addEventListener("DOMContentLoaded", init);

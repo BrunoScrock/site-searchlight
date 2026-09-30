@@ -20,11 +20,22 @@ const API = (function () {
         }
     }
 
+    /* `navigator.onLine` é pouco confiável: informa apenas se existe interface
+       de rede, não se a internet está acessível. Como as buscas dependem de
+       servidores externos, o estado vem do resultado real das requisições. */
+    let connectivity = "unknown";
+
+    function setConnectivity(state) { connectivity = state; }
+
+    function getConnectivity() {
+        if (connectivity !== "unknown") return connectivity;
+        return navigator.onLine === false ? "offline" : "unknown";
+    }
+
     /* Resposta fetch com timeout e leitura de JSON, distinguindo os erros que
        valem a pena tentar outro endpoint (429/504) dos que não. */
     async function fetchJson(url, timeoutMs) {
-        const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
-        const timer = controller ? setTimeout(function () { controller.abort(); }, timeoutMs || CONFIG.requestTimeoutMs) : null;
+        const controller = typeof AbortController !== "undefined" ? new AbortController() : null;        const timer = controller ? setTimeout(function () { controller.abort(); }, timeoutMs || CONFIG.requestTimeoutMs) : null;
         let response;
         try {
             response = await fetch(url, {
@@ -36,9 +47,12 @@ const API = (function () {
             });
         } catch (error) {
             if (error && error.name === "AbortError") {
+                setConnectivity("offline");
                 throw new TimeoutError("O serviço do provedor demorou demais para responder.");
             }
             if (error instanceof ProviderError) throw error;
+            /* TypeError aqui significa CORS, DNS ou proxy: sem acesso à rede. */
+            setConnectivity("offline");
             const detail = error && error.message ? " (" + error.message + ")" : "";
             throw new NetworkError("Não foi possível contatar o serviço do provedor" + detail + ". Verifique sua conexão.");
         } finally {
@@ -47,8 +61,7 @@ const API = (function () {
 
         if (response.status === 429) {
             throw new ProviderError("O serviço do provedor está sobrecarregado no momento.", "rate_limited");
-        }
-        if (response.status === 504 || response.status === 503) {
+        }        if (response.status === 504 || response.status === 503) {
             throw new ProviderError("O serviço do provedor excedeu o tempo de espera.", "rate_limited");
         }
         /* 403/406 quase sempre são o proxy da rede bloqueando o host, não a
@@ -66,7 +79,9 @@ const API = (function () {
         }
 
         try {
-            return await response.json();
+            const data = await response.json();
+            setConnectivity("online");
+            return data;
         } catch (error) {
             throw new ProviderError("Resposta inválida do provedor.", "invalid_response");
         }
@@ -537,18 +552,23 @@ const API = (function () {
         return element ? osmToBusiness(element, {}) : null;
     }
 
-    /* Percorre os mirrors do Overpass até um responder.
-       Dois motivos para avançar: sobrecarga (429/504, comum) ou bloqueio de
-       rede (403/406, comum em proxy corporativo). No fim, a mensagem muda
-       conforme o motivo, porque a solução é diferente em cada caso. */
-    async function overpassQuery(query) {
+    /* Percorre os mirrors do Overpass até um devolver empresas.
+       Três motivos para avançar: sem resultado (200 vazio), sobrecarga
+       (429/504) ou bloqueio de rede (403/406).
+
+       O caso do 200 vazio importa: alguns mirrors respondem 200 com zero
+       elementos em vez de dar erro, e aceitar isso encerra a busca com "nenhuma
+       empresa encontrada" mesmo existindo mirror bom em seguida. */
+    async function overpassQuery(query, expectResults) {
         const mirrors = (CONFIG.osm.overpassMirrors || []).filter(Boolean);
         if (!mirrors.length) {
             throw new ProviderError("Nenhum mirror do OpenStreetMap está configurado.", "not_configured");
         }
 
+        const wantsResults = expectResults !== false;
         const perMirror = Math.max(1, CONFIG.osmAttemptsPerMirror || 1);
         const blocked = [];
+        let emptyMirrors = 0;
         let sawRateLimit = false;
         let lastError = null;
 
@@ -556,35 +576,37 @@ const API = (function () {
             const mirror = mirrors[m];
             for (let attempt = 0; attempt < perMirror; attempt += 1) {
                 try {
-                    return await fetchJson(mirror + "?data=" + encodeURIComponent(query), CONFIG.osmTimeoutMs);
+                    const data = await fetchJson(mirror + "?data=" + encodeURIComponent(query), CONFIG.osmTimeoutMs);
+                    const elements = (data && data.elements) || [];
+                    if (!wantsResults || elements.length) {
+                        return data;
+                    }
+                    /* 200 mas sem empresa: conta e segue para o próximo mirror. */
+                    emptyMirrors += 1;
+                    break;
                 } catch (error) {
                     lastError = error;
                     if (error instanceof BlockedError) {
                         blocked.push.apply(blocked, error.blockedHosts);
                         break;
                     }
-                    if (error && (error.code === "rate_limited" || error.code === "timeout")) {
+                    if (error && (error.code === "rate_limited" || error.code === "timeout" || error.code === "network_error")) {
                         sawRateLimit = true;
                         break;
                     }
-                    /* erro de sintaxe da query ou similar: não adianta trocar
-                       de mirror, a consulta é a mesma. */
-                    if (error && (error.code === "invalid_response" || /^http_4/.test(String(error.code)))) {
-                        throw error;
-                    }
-                    break;
+                    /* erro de sintaxe da consulta: trocar de mirror não resolve. */
+                    throw error;
                 }
             }
         }
 
+        const mirrorHosts = mirrors.map(function (m) {
+            try { return new URL(m).hostname; } catch (e) { return m; }
+        });
+
         if (blocked.length) {
             const hosts = blocked.filter(function (h, i, a) { return a.indexOf(h) === i; });
-            const mirrorHosts = mirrors.map(function (m) {
-                try { return new URL(m).hostname; } catch (e) { return m; }
-            });
-            const todosBloqueados = mirrorHosts.every(function (host) {
-                return hosts.indexOf(host) !== -1;
-            });
+            const todosBloqueados = mirrorHosts.every(function (host) { return hosts.indexOf(host) !== -1; });
             throw new BlockedError(
                 todosBloqueados
                     ? "A rede ou o proxy desta máquina bloqueou todos os servidores do OpenStreetMap (" + mirrorHosts.join(", ") + "). Nada foi retornado — não é problema com a cidade ou a categoria informadas."
@@ -593,13 +615,16 @@ const API = (function () {
             );
         }
 
-        if (sawRateLimit || (lastError && lastError.code === "rate_limited")) {
+        if (sawRateLimit && emptyMirrors === 0) {
             throw new ProviderError(
                 "O OpenStreetMap está sobrecarregado no momento (muitos usuários consultando). Tente novamente em alguns minutos.",
                 "rate_limited"
             );
         }
-        throw lastError || new ProviderError("O serviço OpenStreetMap não respondeu.", "osm_unavailable");
+
+        /* Todos os mirrors responderam, mas nenhum achou empresa. Isso é um
+           resultado legítimo: a categoria pode não estar mapeada na cidade. */
+        return { elements: [], remark: emptyMirrors >= mirrors.length ? "todos_vazios" : "sem_resultado" };
     }
 
     /* ------------------------------------------------------------------ */
@@ -781,6 +806,8 @@ const API = (function () {
         searchBusinesses: searchBusinesses,
         getBusinessDetails: getBusinessDetails,
         getSourceNotice: getSourceNotice,
+        setConnectivity: setConnectivity,
+        getConnectivity: getConnectivity,
         ProviderError: ProviderError,
         QuotaError: QuotaError,
         NetworkError: NetworkError,

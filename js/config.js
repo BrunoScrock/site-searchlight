@@ -29,22 +29,26 @@ const CONFIG = {
     /* Endpoints públicos do OpenStreetMap. Todos respondem com
        Access-Control-Allow-Origin: *, então funcionam direto do navegador.
 
-       A ordem importa: cada mirror é testado até o primeiro responder. Redes
-       corporativas e provedores de internet às vezes bloqueiam mirror por
-       mirror (o proxy do órgão público, por exemplo, recusa overpass-api.de com
-       HTTP 406 e libera os demais). Ter mais de um mirror é o que evita a tela
-       de "nenhuma empresa encontrada" nesses casos. */
+       A ordem importa. Os mirrors foram testados de dentro de um navegador
+       real, não só via linha de comando, porque há duas armadilhas:
+
+       - alguns respondem HTTP 200 com zero elementos em vez de dar erro, o que
+         encerra a busca com "nenhuma empresa encontrada" mesmo havendo mirror
+         bom em seguida (por isso overpass.osm.ch ficou fora da lista);
+       - alguns passam em curl mas falham por CORS no navegador
+         (overpass.openstreetmap.fr).
+
+       A ordem coloca primeiro os que devolveram empresas tanto no navegador
+       quanto na linha de comando. */
     osm: {
         /* Geocodificação: converte "Curitiba, Paraná, Brasil" em coordenadas. */
         nominatim: "https://nominatim.openstreetmap.org/search",
 
-        /* Busca por categoria e raio. O primeiro é o oficial da fundação. */
+        /* Busca por categoria e raio. */
         overpassMirrors: [
             "https://overpass-api.de/api/interpreter",
-            "https://overpass.openstreetmap.fr/api/interpreter",
-            "https://overpass.osm.ch/api/interpreter",
-            "https://overpass.private.coffee/api/interpreter",
-            "https://osm-overpass.gs.mil/api/interpreter"
+            "https://osm-overpass.gs.mil/api/interpreter",
+            "https://overpass.private.coffee/api/interpreter"
         ]
     },
 

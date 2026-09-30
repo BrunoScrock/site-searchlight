@@ -80,6 +80,10 @@
 
 *, *::before, *::after { box-sizing: border-box; }
 
+/* `display` em classes vence o `[hidden]` do HTML em alguns casos (ex.: .badge).
+   Esta regra garante que o atributo hidden sempre esconda o elemento. */
+[hidden] { display: none !important; }
+
 html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
 
 body {

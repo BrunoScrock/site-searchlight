@@ -29,6 +29,19 @@ const UI = (function () {
         element.innerHTML = html;
     }
 
+    function updateConnectivityBadge() {
+        const badge = els.offlineBadge;
+        const offline = API.getConnectivity() === "offline";
+        if (badge) {
+            badge.hidden = !offline;
+            badge.textContent = CONFIG.messages.offline;
+            badge.title = offline
+                ? "As buscas ao OpenStreetMap falharam. Empresas salvas e histórico continuam acessíveis."
+                : "";
+        }
+        document.body.classList.toggle("is-offline", offline);
+    }
+
     function announce(message) {
         if (!els.liveRegion) return;
         els.liveRegion.textContent = message;
@@ -856,6 +869,7 @@ const UI = (function () {
         closeSidebar: closeSidebar,
         fillDatalist: fillDatalist,
         renderCategoryPicker: renderCategoryPicker,
+        updateConnectivityBadge: updateConnectivityBadge,
         selectCategory: selectCategory,
         updateLocationSuggestions: updateLocationSuggestions,
         renderStats: renderStats,
