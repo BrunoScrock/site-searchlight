@@ -318,6 +318,13 @@ const Search = (function () {
     }
 
     function normalizeError(error) {
+        if (error instanceof API.BlockedError) {
+            return {
+                kind: "blocked",
+                message: error.message,
+                detail: "Se você está em uma rede corporativa, é comum o proxy bloquear APIs públicas. Nesse caso, use uma rede sem proxy ou configure um provedor próprio em Configurações."
+            };
+        }
         if (error instanceof API.QuotaError) {
             return { kind: "quota", message: error.message || CONFIG.messages.quotaError, detail: "O provedor atingiu o limite de requisições. Aguarde o reinício do período ou ajuste o plano." };
         }

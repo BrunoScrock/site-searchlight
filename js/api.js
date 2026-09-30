@@ -51,6 +51,16 @@ const API = (function () {
         if (response.status === 504 || response.status === 503) {
             throw new ProviderError("O serviço do provedor excedeu o tempo de espera.", "rate_limited");
         }
+        /* 403/406 quase sempre são o proxy da rede bloqueando o host, não a
+           API recusando a consulta. */
+        if (response.status === 403 || response.status === 406 || response.status === 451) {
+            let host = "";
+            try { host = new URL(url).hostname; } catch (error) { host = "o serviço"; }
+            throw new BlockedError(
+                "A rede ou o proxy da sua empresa bloqueou o acesso a " + host + " (HTTP " + response.status + ")",
+                [host]
+            );
+        }
         if (!response.ok) {
             throw new ProviderError("O provedor respondeu com erro HTTP " + response.status + ".", "http_" + response.status);
         }
@@ -80,6 +90,16 @@ const API = (function () {
         constructor(message) {
             super(message, "not_configured");
             this.name = "NotConfiguredError";
+        }
+    }
+
+    /* O proxy da rede corporativa ou o provedor de internet recusou a
+       requisição. Não é culpa do usuário, e a mensagem precisa dizer isso. */
+    class BlockedError extends ProviderError {
+        constructor(message, blockedHosts) {
+            super(message, "blocked_by_network");
+            this.name = "BlockedError";
+            this.blockedHosts = blockedHosts || [];
         }
     }
 
@@ -370,6 +390,16 @@ const API = (function () {
         };
     }
 
+    /* Sem coordenada não dá para consultar o Overpass por raio. */
+    async function osmResolveCenter(params) {
+        if (params.center && isFinite(params.center.latitude) && isFinite(params.center.longitude)) {
+            return { center: params.center, geocoded: false };
+        }
+        const place = [params.city, params.state, params.country].filter(function (p) { return p; }).join(", ");
+        if (!place) return { center: null, geocoded: false };
+        return { center: await osmGeocode(place), geocoded: true };
+    }
+
     /* Meio-arredondado do bbox em graus, calculado uma vez por busca. */
     let BBOX_LAT = 0.027;
     let BBOX_LON = 0.030;
@@ -467,13 +497,9 @@ const API = (function () {
     }
 
     async function osmSearch(params) {
-        let center = params.center || null;
-        if (!center) {
-            const place = [params.city, params.state, params.country].filter(function (p) { return p; }).join(", ");
-            if (place) {
-                center = await osmGeocode(place);
-            }
-        }
+        const resolved = await osmResolveCenter(params);
+        const center = resolved.center;
+
         if (!center) {
             throw new ProviderError(
                 "Não foi possível localizar \"" + (params.city || params.country || "alocalização") + "\". Tente escrever a cidade de outro formato, por exemplo \"Curitiba, Paraná, Brasil\".",
@@ -511,29 +537,67 @@ const API = (function () {
         return element ? osmToBusiness(element, {}) : null;
     }
 
-    /* O Overpass é um serviço compartilhado e devolve 429/504 com frequência
-       sob carga. Alterna entre os mirrors e insiste com espera crescente. */
+    /* Percorre os mirrors do Overpass até um responder.
+       Dois motivos para avançar: sobrecarga (429/504, comum) ou bloqueio de
+       rede (403/406, comum em proxy corporativo). No fim, a mensagem muda
+       conforme o motivo, porque a solução é diferente em cada caso. */
     async function overpassQuery(query) {
-        const endpoints = [CONFIG.osm.overpass, CONFIG.osm.overpassFallback].filter(Boolean);
-        const maxAttempts = 3;
+        const mirrors = (CONFIG.osm.overpassMirrors || []).filter(Boolean);
+        if (!mirrors.length) {
+            throw new ProviderError("Nenhum mirror do OpenStreetMap está configurado.", "not_configured");
+        }
+
+        const perMirror = Math.max(1, CONFIG.osmAttemptsPerMirror || 1);
+        const blocked = [];
+        let sawRateLimit = false;
         let lastError = null;
 
-        for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
-            const endpoint = endpoints[attempt % endpoints.length];
-            try {
-                return await fetchJson(endpoint + "?data=" + encodeURIComponent(query), CONFIG.osmTimeoutMs);
-            } catch (error) {
-                lastError = error;
-                const retryable = error && (error.code === "rate_limited" || error.code === "timeout" || error.code === "network_error");
-                if (!retryable) throw error;
-                if (attempt < maxAttempts - 1) {
-                    await Utils.delay(1200 * Math.pow(2, attempt));
+        for (let m = 0; m < mirrors.length; m += 1) {
+            const mirror = mirrors[m];
+            for (let attempt = 0; attempt < perMirror; attempt += 1) {
+                try {
+                    return await fetchJson(mirror + "?data=" + encodeURIComponent(query), CONFIG.osmTimeoutMs);
+                } catch (error) {
+                    lastError = error;
+                    if (error instanceof BlockedError) {
+                        blocked.push.apply(blocked, error.blockedHosts);
+                        break;
+                    }
+                    if (error && (error.code === "rate_limited" || error.code === "timeout")) {
+                        sawRateLimit = true;
+                        break;
+                    }
+                    /* erro de sintaxe da query ou similar: não adianta trocar
+                       de mirror, a consulta é a mesma. */
+                    if (error && (error.code === "invalid_response" || /^http_4/.test(String(error.code)))) {
+                        throw error;
+                    }
+                    break;
                 }
             }
         }
 
-        if (lastError && lastError.code === "rate_limited") {
-            throw new ProviderError("O OpenStreetMap está sobrecarregado no momento (muitos usuários consultando). Tente novamente em alguns minutos.", "rate_limited");
+        if (blocked.length) {
+            const hosts = blocked.filter(function (h, i, a) { return a.indexOf(h) === i; });
+            const mirrorHosts = mirrors.map(function (m) {
+                try { return new URL(m).hostname; } catch (e) { return m; }
+            });
+            const todosBloqueados = mirrorHosts.every(function (host) {
+                return hosts.indexOf(host) !== -1;
+            });
+            throw new BlockedError(
+                todosBloqueados
+                    ? "A rede ou o proxy desta máquina bloqueou todos os servidores do OpenStreetMap (" + mirrorHosts.join(", ") + "). Nada foi retornado — não é problema com a cidade ou a categoria informadas."
+                    : "Parte dos servidores do OpenStreetMap está bloqueada nesta rede (" + hosts.join(", ") + "), e os restantes não responderam agora.",
+                hosts
+            );
+        }
+
+        if (sawRateLimit || (lastError && lastError.code === "rate_limited")) {
+            throw new ProviderError(
+                "O OpenStreetMap está sobrecarregado no momento (muitos usuários consultando). Tente novamente em alguns minutos.",
+                "rate_limited"
+            );
         }
         throw lastError || new ProviderError("O serviço OpenStreetMap não respondeu.", "osm_unavailable");
     }
@@ -721,6 +785,7 @@ const API = (function () {
         QuotaError: QuotaError,
         NetworkError: NetworkError,
         TimeoutError: TimeoutError,
-        NotConfiguredError: NotConfiguredError
+        NotConfiguredError: NotConfiguredError,
+        BlockedError: BlockedError
     };
 })();

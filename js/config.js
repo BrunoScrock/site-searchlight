@@ -26,12 +26,26 @@ const CONFIG = {
        Ex.: "https://api.seudominio.com/places" — implementa POST { action, params }. */
     proxyUrl: "",
 
-    /* Endpoints públicos do OpenStreetMap. Ambos respondem com
-       Access-Control-Allow-Origin: *, então funcionam direto do navegador. */
+    /* Endpoints públicos do OpenStreetMap. Todos respondem com
+       Access-Control-Allow-Origin: *, então funcionam direto do navegador.
+
+       A ordem importa: cada mirror é testado até o primeiro responder. Redes
+       corporativas e provedores de internet às vezes bloqueiam mirror por
+       mirror (o proxy do órgão público, por exemplo, recusa overpass-api.de com
+       HTTP 406 e libera os demais). Ter mais de um mirror é o que evita a tela
+       de "nenhuma empresa encontrada" nesses casos. */
     osm: {
-        overpass: "https://overpass-api.de/api/interpreter",
-        overpassFallback: "https://overpass.private.coffee/api/interpreter",
-        nominatim: "https://nominatim.openstreetmap.org/search"
+        /* Geocodificação: converte "Curitiba, Paraná, Brasil" em coordenadas. */
+        nominatim: "https://nominatim.openstreetmap.org/search",
+
+        /* Busca por categoria e raio. O primeiro é o oficial da fundação. */
+        overpassMirrors: [
+            "https://overpass-api.de/api/interpreter",
+            "https://overpass.openstreetmap.fr/api/interpreter",
+            "https://overpass.osm.ch/api/interpreter",
+            "https://overpass.private.coffee/api/interpreter",
+            "https://osm-overpass.gs.mil/api/interpreter"
+        ]
     },
 
     /* Overpass é um serviço compartilhado e costuma recusar carga excessiva.
@@ -39,6 +53,7 @@ const CONFIG = {
     osmTimeoutMs: 45000,
     osmMaxResults: 120,
     osmResultSeconds: 180,
+    osmAttemptsPerMirror: 2,
 
     /* Cabeçalho opcional enviado ao proxy. Prefira um token de uso único por
        sessão gerado localmente; nunca versione um segredo real aqui. */

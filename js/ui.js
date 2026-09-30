@@ -309,11 +309,22 @@ const UI = (function () {
     }
 
     function renderError(errorInfo) {
+        const isBlocked = errorInfo.kind === "blocked";
+        const isQuota = errorInfo.kind === "quota";
         const retry = '<button type="button" class="btn btn--primary" data-action="retry">' + icon("refresh") + "Tentar novamente</button>";
-        setHtml(els.resultsContainer, '<div class="notice notice--error" role="alert">' +
-            icon("alert") +
-            "<div><h3>Não foi possível concluir a pesquisa</h3><p>" + Utils.escapeHtml(errorInfo.message) + "</p>" +
+        const extras = [];
+        if (isBlocked) {
+            extras.push('<p class="muted">Opções: testar em uma rede sem proxy corporativo, ou configurar em <strong>Configurações</strong> um provedor com proxy próprio.</p>');
+        }
+        if (isQuota) {
+            extras.push('<p class="muted">Tente novamente em alguns minutos, ou reduza o raio da busca.</p>');
+        }
+        setHtml(els.resultsContainer, '<div class="notice ' + (isBlocked ? "notice--warning" : "notice--error") + '" role="alert">' +
+            icon(isBlocked ? "alert" : "alert") +
+            "<div><h3>" + (isBlocked ? "A rede bloqueou o acesso ao OpenStreetMap" : "Não foi possível concluir a pesquisa") + "</h3>" +
+            "<p>" + Utils.escapeHtml(errorInfo.message) + "</p>" +
             (errorInfo.detail ? '<p class="muted">' + Utils.escapeHtml(errorInfo.detail) + "</p>" : "") +
+            extras.join("") +
             '<div class="notice__actions">' + retry + "</div></div></div>");
         if (els.resultsContainer) els.resultsContainer.setAttribute("aria-busy", "false");
         announce(errorInfo.message);
